@@ -1,0 +1,8 @@
+name: vodca_util
+dependencies:
+  - python=3
+  - numpy
+  - pandas
+  - netcdf4
+  - pip:
+      - smecv_grid
