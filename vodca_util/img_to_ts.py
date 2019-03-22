@@ -20,7 +20,7 @@ class Img2Ts(object):
         # lon_chunks = np.array_split(self.grid.activearrlon.filled(), nchunks)
         # lat_chunks = np.array_split(self.grid.activearrlat.filled(), nchunks)
         statistics_list = []
-        for chunk in chunks[:3]:
+        for chunk in chunks:
             statistics = self.convert_gpis(chunk)
             statistics_list.append(statistics)
         print('d')
@@ -45,7 +45,7 @@ class Img2Ts(object):
         # year_dirs.sort()
         vod_list = []
         time_list = []
-        for year_dir in year_dirs[:2]:
+        for year_dir in year_dirs:
             print(year_dir)
             year_path = os.path.join(self.path, year_dir)
             fnames = os.listdir(year_path)
