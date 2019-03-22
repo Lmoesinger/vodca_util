@@ -4,18 +4,19 @@ import pandas as pd
 from smecv_grid.grid import SMECV_Grid_v042
 import datetime as dt
 import os
+from vodca_util.functions_to_apply import get_monthly_stats, get_yearly_stats
 
 
-class Img2Ts(object):
-    def __init__(self, in_path, out_fname):
+class ApplyFun(object):
+    def __init__(self, in_path, out_dict):
         self.path = in_path
         self.grid = SMECV_Grid_v042()
         self.fillvalue = np.nan
-        self.out_fname = out_fname
+        self.out_dict = out_dict
 
     def convert_all(self, nchunks):
         '''
-        Calculates the yearly statistics globaly and saves them to a netcdf file
+        Calculates the yearly statistics globally and saves them to a netcdf file
         :param nchunks: number of chunks. E.g. with nchunks=10 only about 1/10 of the data is in the memory at the same
         time. Try to keep nchunks as low as possible, as each time it has to open all files again.
         :return:
@@ -26,25 +27,36 @@ class Img2Ts(object):
         #
         # lon_chunks = np.array_split(self.grid.activearrlon.filled(), nchunks)
         # lat_chunks = np.array_split(self.grid.activearrlat.filled(), nchunks)
-        statistics_list = []
+        chunk_statistics_list = []
         for chunk in chunks:
-            statistics = self.convert_gpis(chunk)
-            statistics_list.append(statistics)
-        variable_dict = {}
-        for variable in statistics:
-            variable_dict[variable] = pd.concat([stats[variable] for stats in statistics_list], axis=1)
+            stats_dict = {}
+            df = self.read_data(chunk)
+            for fun in self.out_dict:
+                stats_dict[fun] = out_dict[fun](df)
+            chunk_statistics_list.append(stats_dict)
 
-        self.write_to_nc(variable_dict)
+        for fun in self.out_dict:
+            stats = [chunk[fun] for chunk in chunk_statistics_list]
+            variables = list(stats[0])
+            variable_dict = {}
+            for variable in variables:
+                variable_dict[variable] = pd.concat([stat[variable] for stat in stats], axis=1)
+            self.write_to_nc(variable_dict, fun)
+
+        # variable_dict = {}
+        # for variable in statistics:
+        #     variable_dict[variable] = pd.concat([stats[variable] for stats in chunk_statistics_list], axis=1)
+        #
+        # variable_dict = {}
+        # for variable in statistics:
+        #     variable_dict[variable] = pd.concat([stats[variable] for stats in chunk_statistics_list], axis=1)
+        #
+        # self.write_to_nc(variable_dict)
         #
         # for cell in self.grid.get_cells().filled():
         #     self.convert_gpis(self.grid.grid_points_for_cell(cell)[0].filled())
 
-    def convert_gpis(self, gpis):
-        '''
-        Given a list of gpis, read the vod data of them and calcualte the yearly statistics for them.
-        :param gpis: list-like, grid point ids
-        :return: statistics of each gpi
-        '''
+    def read_data(self, gpis):
         lonlats = self.grid.gpi2lonlat(gpis)
         lons = lonlats[0]
         lats = lonlats[1]
@@ -71,17 +83,13 @@ class Img2Ts(object):
 
         df = pd.DataFrame(vod_list, pd.to_datetime('1970-01-01') + pd.to_timedelta(time_list, unit='d'), columns=gpis)
         df.sort_index(inplace=True)
-        df_grouped = df.groupby(df.index.year)
-        n_obs = df_grouped.count()
-        n_obs[np.isnan(n_obs)] = 0
-        return {'mean': df_grouped.mean(),
-                'min': df_grouped.min(),
-                'max': df_grouped.max(),
-                'n_obs': n_obs,
-                'variance': df_grouped.var()}
+        return df
 
 
-    def write_to_nc(self, variable_dict):
+
+
+
+    def write_to_nc(self, variable_dict, fname):
         '''
         Writes the calculated yearly statistics to a netcdf file
         :param variable_dict: dictionary, each entry is a yearly statistic, e.g. mean, variance, etc.
@@ -93,7 +101,7 @@ class Img2Ts(object):
         lats = lonlats[1]
         cols = ((np.array(lons) - 0.25 / 2) / 0.25 + 720).astype(int)
         rows = (-(np.array(lats) + 0.25 / 2) / 0.25 + 360).astype(int)
-        ds = self.create_nc_file(dates)
+        ds = self.create_nc_file(dates, fname)
 
         for nc_var_name in variable_dict.keys():
             temp = np.empty((len(ds['time']), len(ds['lat']), len(ds['lon'])))
@@ -104,13 +112,13 @@ class Img2Ts(object):
             nc_var[:] = temp
         ds.close()
 
-    def create_nc_file(self, dates):
+    def create_nc_file(self, dates, fname):
         '''
         Sets up the output netcdf file. Creates the file, creates and sets the values the dimensions
         :param dates: np.array, containing the years where observations are available
         :return: ds, the initialized netcdf4 object
         '''
-        ds = nc.Dataset(self.out_fname, mode='w')
+        ds = nc.Dataset(fname, mode='w')
 
         lon_1d = np.unique(self.grid.arrlon.filled())
         londim = ds.createDimension('lon', lon_1d.__len__())
@@ -130,7 +138,7 @@ class Img2Ts(object):
 
         timedim = ds.createDimension("time", len(dates))
         timevar = ds.createVariable('time', dates.dtype, ('time',))
-        timevar.units = 'year'
+        # timevar.units = 'year'
         ds.calendar = 'standard'
         timevar.calendar = 'standard'
         timevar.long_name = 'time'
@@ -150,18 +158,20 @@ if __name__ == "__main__":
     Adjust values as needed!
     """
     # path to folder containint the vodca data. Assumes that no additional files have been added to it after unzipping it
-    in_path = '/data-write/RADAR/vod_merged/released/Ku-Band/'
+    in_path = '/data-write/RADAR/vod_merged/released/C-Band/'
 
-    # output file, place and name however you like (has to end with .nc)
-    out_fname = '/data-write/RADAR/vod_merged/released/vodca_v01-0_yearly_stats_Ku-band.nc'
+    out_path = '/data-write/RADAR/vod_merged/released/'
 
-    # how many chunks. You want to keep it as low as possible to increase processing speed,
-    # but the lower it is the higher the required memory.
-    # E.g. Ku-band has a size of 270GB, with a chunk size of 10 you would need at least 27GB of ram
+    out_dict = {os.path.join(out_path, 'vodca_v01-0_yearly_stats_Ku-band.nc'): get_yearly_stats,
+                os.path.join(out_path, 'vodca_v01-0_monthly_stats_Ku-band.nc'): get_monthly_stats}
+    # Number of chunks.
+    #   low -> increased processing speed but high memory requirement
+    #   high -> lower speed but also lower memory required
+    # Therefore you want to take the lowest number your memory can support.
     nchunks = 2
 
     # initialize converter
-    converter = Img2Ts(in_path, out_fname)
+    converter = ApplyFun(in_path, out_dict)
     # run it
     converter.convert_all(nchunks)
 
