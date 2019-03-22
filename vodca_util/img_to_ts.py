@@ -7,10 +7,11 @@ import os
 
 
 class Img2Ts(object):
-    def __init__(self, path):
-        self.path = path
+    def __init__(self, in_path, out_fname):
+        self.path = in_path
         self.grid = SMECV_Grid_v042()
         self.fillvalue = np.nan
+        self.out_fname = out_fname
 
     def convert_all(self, nchunks):
 
@@ -23,13 +24,11 @@ class Img2Ts(object):
         for chunk in chunks:
             statistics = self.convert_gpis(chunk)
             statistics_list.append(statistics)
-        print('d')
         variable_dict = {}
         for variable in statistics:
             variable_dict[variable] = pd.concat([stats[variable] for stats in statistics_list], axis=1)
 
-        [statistics_list]
-
+        self.write_to_nc(variable_dict)
         #
         # for cell in self.grid.get_cells().filled():
         #     self.convert_gpis(self.grid.grid_points_for_cell(cell)[0].filled())
@@ -51,6 +50,7 @@ class Img2Ts(object):
             fnames = os.listdir(year_path)
             # fnames.sort(key=self._sorting)
             for fname in fnames:
+                # print(fname)
                 df = nc.Dataset(os.path.join(year_path, fname))
                 vod = df['vod'][:].filled(np.nan)
                 vod = vod.squeeze()[rows, cols]
@@ -58,7 +58,6 @@ class Img2Ts(object):
                 vod_list.append(vod)
                 time_list.append(time)
 
-        print('s')
         df = pd.DataFrame(vod_list, pd.to_datetime('1970-01-01') + pd.to_timedelta(time_list, unit='d'), columns=gpis)
         df.sort_index(inplace=True)
         df_grouped = df.groupby(df.index.year)
@@ -81,14 +80,14 @@ class Img2Ts(object):
         for nc_var_name in variable_dict.keys():
             temp = np.empty((len(ds['time']), len(ds['lat']), len(ds['lon'])))
             temp[:] = self.fillvalue
-            variable = variable_dict['mean']
+            variable = variable_dict[nc_var_name]
             temp[:, rows, cols] = variable.values
             nc_var = ds.createVariable(nc_var_name, variable.values.dtype, ('time', 'lat', 'lon'), fill_value=self.fillvalue)
             nc_var[:] = temp
         ds.close()
 
     def create_nc_file(self, dates):
-        ds = nc.Dataset(os.path.join(self.path, 'vodca_v01-0_yearly_stats.nc'), mode='w')
+        ds = nc.Dataset(self.out_fname, mode='w')
 
         lon_1d = np.unique(self.grid.arrlon.filled())
         londim = ds.createDimension('lon', lon_1d.__len__())
@@ -108,7 +107,7 @@ class Img2Ts(object):
 
         timedim = ds.createDimension("time", len(dates))
         timevar = ds.createVariable('time', dates.dtype, ('time',))
-        timevar.units = 'days since 1970-1-1 0:0:0'
+        timevar.units = 'year'
         ds.calendar = 'standard'
         timevar.calendar = 'standard'
         timevar.long_name = 'time'
@@ -124,6 +123,7 @@ class Img2Ts(object):
 
 
 if __name__ == "__main__":
-    path = '/data/v01_0/C-Band/'
-    converter = Img2Ts(path)
-    converter.convert_all(10)
+    in_path = '/data-write/RADAR/vod_merged/released/C-Band/'
+    out_fname = '/data-write/RADAR/vod_merged/released/vodca_v01-0_yearly_stats_C-band.nc'
+    converter = Img2Ts(in_path, out_fname)
+    converter.convert_all(2)
