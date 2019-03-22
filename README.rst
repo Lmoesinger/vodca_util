@@ -3,13 +3,13 @@ vodca_util
 ==========
 
 
-Add a short description here!
+Utility package to process VODCA, https://zenodo.org/record/2575599
 
 
 Description
 ===========
 
-A longer description of your project goes here...
+Currently contains a class that can be used to apply a function on the vodca time series. As an example there are currently functions to calculate yearly statistics and monthly means, but other functicions can be added easily.
 
 
 Note
