@@ -46,7 +46,6 @@ class ApplyFun(object):
                 variable_dict[variable] = pd.concat([stat[variable] for stat in stats], axis=1)
             self.write_to_nc(variable_dict, fun)
 
-
     def read_data(self, gpis):
         lonlats = self.grid.gpi2lonlat(gpis)
         lons = lonlats[0]
@@ -72,7 +71,6 @@ class ApplyFun(object):
         df = pd.DataFrame(vod_list, pd.to_datetime('1970-01-01') + pd.to_timedelta(time_list, unit='d'), columns=gpis)
         df.sort_index(inplace=True)
         return df
-
 
     def write_to_nc(self, variable_dict, fname):
         '''
@@ -137,7 +135,8 @@ if __name__ == "__main__":
     """
     Adjust values as needed!
     """
-    # path to folder containint the vodca data. Assumes that no additional files have been added to it after unzipping it
+    # path to folder containint the vodca data.
+    # Assumes that no additional files have been added to it after unzipping it
     in_path = '/data-write/RADAR/vod_merged/released/X-band/'
     # path to folder where output files will be created
     out_path = '/data-write/RADAR/vod_merged/released/'
