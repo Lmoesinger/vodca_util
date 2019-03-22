@@ -9,6 +9,12 @@ from vodca_util.functions_to_apply import get_monthly_stats, get_yearly_stats
 
 class ApplyFun(object):
     def __init__(self, in_path, out_dict):
+        '''
+        initializes the object
+        :param in_path: string, path to folder created by unzipping the vodca data
+        :param out_dict: dictionary, each entry is a pair of "filename: function handle".
+        '''
+
         self.path = in_path
         self.grid = SMECV_Grid_v042()
         self.fillvalue = np.nan
@@ -24,9 +30,6 @@ class ApplyFun(object):
 
         gpis = self.grid.activegpis.filled()
         chunks = np.array_split(gpis, nchunks)
-        #
-        # lon_chunks = np.array_split(self.grid.activearrlon.filled(), nchunks)
-        # lat_chunks = np.array_split(self.grid.activearrlat.filled(), nchunks)
         chunk_statistics_list = []
         for chunk in chunks:
             stats_dict = {}
@@ -34,6 +37,7 @@ class ApplyFun(object):
             for fun in self.out_dict:
                 stats_dict[fun] = out_dict[fun](df)
             chunk_statistics_list.append(stats_dict)
+            del df
 
         for fun in self.out_dict:
             stats = [chunk[fun] for chunk in chunk_statistics_list]
@@ -43,18 +47,6 @@ class ApplyFun(object):
                 variable_dict[variable] = pd.concat([stat[variable] for stat in stats], axis=1)
             self.write_to_nc(variable_dict, fun)
 
-        # variable_dict = {}
-        # for variable in statistics:
-        #     variable_dict[variable] = pd.concat([stats[variable] for stats in chunk_statistics_list], axis=1)
-        #
-        # variable_dict = {}
-        # for variable in statistics:
-        #     variable_dict[variable] = pd.concat([stats[variable] for stats in chunk_statistics_list], axis=1)
-        #
-        # self.write_to_nc(variable_dict)
-        #
-        # for cell in self.grid.get_cells().filled():
-        #     self.convert_gpis(self.grid.grid_points_for_cell(cell)[0].filled())
 
     def read_data(self, gpis):
         lonlats = self.grid.gpi2lonlat(gpis)
@@ -64,16 +56,13 @@ class ApplyFun(object):
         rows = (-(np.array(lats) + 0.25 / 2) / 0.25 + 360).astype(int)
 
         year_dirs = os.listdir(self.path)
-        # year_dirs.sort()
         vod_list = []
         time_list = []
         for year_dir in year_dirs:
             print(year_dir)
             year_path = os.path.join(self.path, year_dir)
             fnames = os.listdir(year_path)
-            # fnames.sort(key=self._sorting)
             for fname in fnames:
-                # print(fname)
                 df = nc.Dataset(os.path.join(year_path, fname))
                 vod = df['vod'][:].filled(np.nan)
                 vod = vod.squeeze()[rows, cols]
@@ -91,8 +80,9 @@ class ApplyFun(object):
 
     def write_to_nc(self, variable_dict, fname):
         '''
-        Writes the calculated yearly statistics to a netcdf file
+        Writes the calculated statistics to a netcdf file
         :param variable_dict: dictionary, each entry is a yearly statistic, e.g. mean, variance, etc.
+        :param fname: file name
         :return: nothing
         '''
         dates = np.array(variable_dict[list(variable_dict)[0]].index)
@@ -116,6 +106,7 @@ class ApplyFun(object):
         '''
         Sets up the output netcdf file. Creates the file, creates and sets the values the dimensions
         :param dates: np.array, containing the years where observations are available
+        :param fname: string, file name
         :return: ds, the initialized netcdf4 object
         '''
         ds = nc.Dataset(fname, mode='w')
@@ -158,12 +149,13 @@ if __name__ == "__main__":
     Adjust values as needed!
     """
     # path to folder containint the vodca data. Assumes that no additional files have been added to it after unzipping it
-    in_path = '/data-write/RADAR/vod_merged/released/C-Band/'
-
+    in_path = '/data-write/RADAR/vod_merged/released/X-band/'
+    # path to folder where output files will be created
     out_path = '/data-write/RADAR/vod_merged/released/'
 
-    out_dict = {os.path.join(out_path, 'vodca_v01-0_yearly_stats_Ku-band.nc'): get_yearly_stats,
-                os.path.join(out_path, 'vodca_v01-0_monthly_stats_Ku-band.nc'): get_monthly_stats}
+    # dictionary, each name is the filename while the entry is the function to be applied
+    out_dict = {os.path.join(out_path, 'vodca_v01-0_yearly_stats_X-band.nc'): get_yearly_stats,
+                os.path.join(out_path, 'vodca_v01-0_monthly_stats_X-band.nc'): get_monthly_stats}
     # Number of chunks.
     #   low -> increased processing speed but high memory requirement
     #   high -> lower speed but also lower memory required
