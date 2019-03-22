@@ -2,7 +2,6 @@ import numpy as np
 import netCDF4 as nc
 import pandas as pd
 from smecv_grid.grid import SMECV_Grid_v042
-import datetime as dt
 import os
 from vodca_util.functions_to_apply import get_monthly_stats, get_yearly_stats
 
@@ -75,9 +74,6 @@ class ApplyFun(object):
         return df
 
 
-
-
-
     def write_to_nc(self, variable_dict, fname):
         '''
         Writes the calculated statistics to a netcdf file
@@ -135,13 +131,6 @@ class ApplyFun(object):
         timevar.long_name = 'time'
         timevar[:] = dates
         return ds
-
-
-    def _sorting(self, L):
-        splitup = L.split('_')
-        return pd.to_datetime(splitup[-1][:-3])
-
-
 
 
 if __name__ == "__main__":
